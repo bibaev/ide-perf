@@ -16,6 +16,10 @@
 
 package com.google.idea.perf.tracer.ui
 
+import com.google.idea.perf.allocation.plugin.AllocationPluginManagerController
+import com.google.idea.perf.allocation.plugin.ui.PluginInfo
+import com.google.idea.perf.allocation.plugin.ui.AllocationPluginTable
+import com.google.idea.perf.allocation.plugin.ui.AllocationPluginTableModel
 import com.google.idea.perf.tracer.CallTreeManager
 import com.google.idea.perf.tracer.CallTreeUtil
 import com.google.idea.perf.tracer.MutableCallTree
@@ -27,11 +31,14 @@ import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager.getApplication
 import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.editor.ex.util.EditorUtil
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.util.ProgressIndicatorBase
 import com.intellij.openapi.project.Project
 import com.google.idea.perf.util.onDispose
+import com.intellij.ide.plugins.InstalledPluginsState
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.MessageType
 import com.intellij.openapi.ui.popup.util.PopupUtil
@@ -78,9 +85,11 @@ class TracerPanel(
     private val commandLine: TracerCommandLine
     private val progressBar: JProgressBar
     private var showingEdtOnly = false
-    private val treeSnapshot : MutableCallTree
+    private val treeSnapshot: MutableCallTree
     private val listView: TracerTable
     private val treeView: TracerTree
+    private val allocationPluginTable: AllocationPluginTable
+    private val allocationPluginTab: TabInfo
     private val tracingOverheadLabel: JBLabel
     private val uiOverheadLabel: JBLabel
     private var uiOverhead = 0L
@@ -160,6 +169,13 @@ class TracerPanel(
         val treeTab = TabInfo(JBScrollPane(treeView))
             .setText("Tree")
             .setSideComponent(createTabSideComponent())
+        // Allocation plugin table.
+        allocationPluginTable = AllocationPluginTable(AllocationPluginTableModel())
+        allocationPluginTab = TabInfo(JBScrollPane(allocationPluginTable))
+            .setText("Allocation Plugin")
+            .setSideComponent(createTabSideComponent())
+        allocationPluginTab.isHidden = true
+        tabs.addTab(allocationPluginTab)
         tabs.addTab(treeTab)
 
         // Tracing overhead label.
@@ -185,7 +201,7 @@ class TracerPanel(
 
         // Schedule tree data updates.
         val refreshFuture = EdtExecutorService.getScheduledExecutorInstance()
-            .scheduleWithFixedDelay(::updateCallTree, 0, REFRESH_DELAY_MS, MILLISECONDS)
+            .scheduleWithFixedDelay(::updateInfo, 0, REFRESH_DELAY_MS, MILLISECONDS)
         parentDisposable.onDispose { refreshFuture.cancel(false) }
 
         // Condense all components except the tab view.
@@ -217,6 +233,36 @@ class TracerPanel(
                     progressBar.maximum = 100
                     progressBar.value = (fraction * 100).toInt().coerceIn(0, 100)
                 }
+            }
+        }
+    }
+
+    private fun updateInfo() {
+        updatePluginInfo()
+        updateCallTree()
+    }
+
+    private fun updatePluginInfo() {
+        val pluginManager = AllocationPluginManagerController.getManager() ?: return
+        val pluginInfos = mutableListOf<PluginInfo>()
+        for ((name, pluginSize) in pluginManager.pluginIdToSize) {
+            pluginInfos.add(PluginInfo(name, pluginSize))
+        }
+        allocationPluginTable.setPluginInfo(pluginInfos)
+    }
+
+    fun showAllocationPluginTab() {
+        if (allocationPluginTab.isHidden) {
+            runInEdt {
+                allocationPluginTab.isHidden = false
+            }
+        }
+    }
+
+    fun hideAllocationPluginTab() {
+        if (!allocationPluginTab.isHidden) {
+            runInEdt {
+                allocationPluginTab.isHidden = true
             }
         }
     }

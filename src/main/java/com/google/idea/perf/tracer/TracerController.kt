@@ -17,8 +17,10 @@
 package com.google.idea.perf.tracer
 
 import com.google.idea.perf.AgentLoader
+import com.google.idea.perf.allocation.plugin.AllocationPluginManagerController
 import com.google.idea.perf.tracer.ui.TracerPanel
 import com.google.idea.perf.util.ExecutorWithExceptionLogging
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager.getApplication
 import com.intellij.openapi.application.invokeAndWaitIfNeeded
@@ -115,6 +117,20 @@ class TracerController(
                     val affectedClasses = TracerConfigUtil.getAffectedClasses(oldRequests)
                     retransformClasses(affectedClasses, progress)
                     CallTreeManager.clearCallTrees()
+                    AllocationPluginManagerController.getManager()?.resetPluginClassesList()
+                    view.hideAllocationPluginTab()
+                }
+            }
+            is TracerCommand.PluginAlloc -> {
+                val allocationPluginManager = AllocationPluginManagerController.getManagerAndLoadAgent()
+                if (allocationPluginManager != null) {
+                    val plugin = PluginManagerCore.getLoadedPlugins().find { it.pluginId.idString == command.pluginName } ?: return
+                    if (command.enable) {
+                        view.showAllocationPluginTab()
+                        allocationPluginManager.addPlugin(plugin)
+                    } else {
+                        allocationPluginManager.removePlugin(plugin)
+                    }
                 }
             }
             is TracerCommand.Trace -> {

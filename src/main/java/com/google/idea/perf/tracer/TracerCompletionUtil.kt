@@ -26,6 +26,7 @@ import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.codeInsight.lookup.LookupElementPresentation
 import com.intellij.icons.AllIcons
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.editor.EditorModificationUtil
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.util.PlatformIcons.ABSTRACT_CLASS_ICON
@@ -35,6 +36,7 @@ import com.intellij.util.PlatformIcons.CLASS_ICON
 import com.intellij.util.PlatformIcons.ENUM_ICON
 import com.intellij.util.PlatformIcons.EXCEPTION_CLASS_ICON
 import com.intellij.util.PlatformIcons.INTERFACE_ICON
+import com.intellij.util.PlatformIcons.LIBRARY_ICON
 import com.intellij.util.PlatformIcons.METHOD_ICON
 import com.intellij.util.PlatformIcons.PACKAGE_ICON
 import com.intellij.util.containers.ArrayListSet
@@ -79,6 +81,22 @@ object TracerCompletionUtil {
                     val lookup = LookupElementBuilder.create("$pkgName.*").withIcon(PACKAGE_ICON)
                     result.addElement(PrioritizedLookupElement.withPriority(lookup, 1.0))
                 }
+            }
+        }
+    }
+
+    fun addLookupElementsForLoadedPlugins(result: CompletionResultSet) {
+        val plugins = PluginManagerCore.getLoadedPlugins()
+        val prefixIsEmpty = result.prefixMatcher.prefix.isEmpty()
+        var numResultsForEmptyPrefix = 0
+
+        for (plugin in plugins) {
+            ProgressManager.checkCanceled()
+            // Class name completion: com.example.Class
+            result.addElement(PluginsLookupElement(plugin.pluginId.idString, LIBRARY_ICON))
+            if (prefixIsEmpty && ++numResultsForEmptyPrefix >= 100) {
+                result.restartCompletionOnAnyPrefixChange()
+                break
             }
         }
     }
@@ -167,6 +185,34 @@ object TracerCompletionUtil {
 
     private fun computeClassContextString(fqName: String, simpleName: String): String {
         return fqName.removeSuffix(simpleName).removeSuffix("$").removeSuffix(".")
+    }
+
+    private class PluginsLookupElement(
+        private val name: String,
+        private val icon: Icon
+        ) : LookupElement() {
+
+        override fun getLookupString(): String = name
+
+        override fun getAllLookupStrings(): Set<String> {
+            val result = ArrayListSet<String>()
+            result.add(lookupString)
+            result.add(name)
+            return result
+        }
+
+        override fun handleInsert(context: InsertionContext) {
+            // Insert fqName and immediately start completing the method.
+            val editor = context.editor
+            editor.document.replaceString(context.startOffset, context.tailOffset, name)
+            EditorModificationUtil.insertStringAtCaret(editor, " ")
+            AutoPopupController.getInstance(context.project).scheduleAutoPopup(editor)
+        }
+
+        override fun renderElement(presentation: LookupElementPresentation) {
+            presentation.itemText = lookupString
+            presentation.icon = icon
+        }
     }
 
     /** An auto-completion result for a class that can be traced. */
