@@ -82,6 +82,7 @@ class TracerCompletionProvider : TextCompletionProvider, DumbAware {
                         .withTailText(" <method>")
                         .withInsertHandler(AddSpaceInsertHandler.INSTANCE_WITH_AUTO_POPUP)
                 )
+                result.addElement(LookupElementBuilder.create("show-plugins-sizes"))
                 result.addElement(
                     LookupElementBuilder.create("plugin-alloc")
                         .withTailText(" <plugin id>")

@@ -20,6 +20,7 @@ import com.google.idea.perf.AgentLoader
 import com.intellij.ide.plugins.IdeaPluginDescriptor
 import com.intellij.memory.agent.AllocationListener
 import com.intellij.memory.agent.MemoryAgent
+import java.lang.System
 import java.lang.instrument.Instrumentation
 import java.lang.reflect.Field
 import java.util.*
@@ -27,31 +28,11 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.ArrayList
 
 class AllocationPluginManager(private val agent: MemoryAgent) {
-    data class AllocationInfo(var allocationCount: Long = 0, var totalAllocationSize: Long = 0) {
-        fun increment(allocationSize: Long): AllocationInfo {
-            allocationCount += 1
-            totalAllocationSize += allocationSize
-            return this
-        }
-    }
-
     val pluginIdToSize: MutableMap<String, Long> = ConcurrentHashMap()
 
     fun resetPluginClassesList() {
         pluginIdToSize.clear()
     }
-
-//    fun removeAllocationPluginListener(plugin: IdeaPluginDescriptor) {
-//        val classes = pluginIdToClasses[plugin.name]
-//        if (classes != null) {
-//            for(clazz in classes) {
-//                val className = clazz.name
-//                val listener = classNameToAllocationListener[className] ?: continue
-//                classNameToAllocationInfo.remove(className)
-//                agent.removeAllocationListener(listener)
-//            }
-//        }
-//    }
 
     fun removePlugin(plugin: IdeaPluginDescriptor) {
         pluginIdToSize.remove(plugin.name)
@@ -60,14 +41,19 @@ class AllocationPluginManager(private val agent: MemoryAgent) {
     fun addPlugin(plugin: IdeaPluginDescriptor) {
         val classLoader = plugin.pluginClassLoader
         val instrumentation = AgentLoader.instrumentation ?: return
-        val size = agent.getRetainedSizeByClassloaders(arrayOf(classLoader as ClassLoader))
+        val size = agent.getRetainedSizeByClassLoaders(arrayOf(classLoader as ClassLoader))
         pluginIdToSize[plugin.name] = size[0]
     }
 
-//    private fun createAllocationListener(className: String) =
-//        AllocationListener { info ->
-//            classNameToAllocationInfo.compute(className) { _, currentCount ->
-//                currentCount?.increment(info.size) ?: AllocationInfo(1, info.size)
-//            }
-//        }
+    fun addPlugins(plugins: List<IdeaPluginDescriptor>) {
+        val classLoaders = plugins.filter {it.isEnabled}.map { it.pluginClassLoader }
+        val sizes = agent.getRetainedSizeByClassLoaders(classLoaders.toTypedArray())
+        //var s = 0L
+        for (i in 0 until plugins.size){
+            pluginIdToSize[plugins[i].name] = sizes[i]
+            //s += sizes[i]
+        }
+//        System.out.println(s)
+//        System.out.println(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory())
+    }
 }

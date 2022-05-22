@@ -133,6 +133,13 @@ class TracerController(
                     }
                 }
             }
+            is TracerCommand.AllPlugins -> {
+                val allocationPluginManager = AllocationPluginManagerController.getManagerAndLoadAgent()
+                if (allocationPluginManager != null) {
+                    view.showAllocationPluginTab()
+                    allocationPluginManager.addPlugins(PluginManagerCore.getLoadedPlugins())
+                }
+            }
             is TracerCommand.Trace -> {
                 val countOnly = command.traceOption == TraceOption.COUNT_ONLY
 
