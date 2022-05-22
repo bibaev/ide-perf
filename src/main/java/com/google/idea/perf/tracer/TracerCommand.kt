@@ -30,6 +30,15 @@ sealed class TracerCommand {
     /** Zero out all tracepoint data and reset the call tree. */
     object Reset: TracerCommand()
 
+    /** Show all plugins sizes **/
+    object AllPlugins: TracerCommand()
+
+    /** Enable or disable allocation of plugin **/
+    data class PluginAlloc(
+        val enable: Boolean,
+        val pluginName: String?
+    ): TracerCommand()
+
     /** Trace or untrace a set of methods. */
     data class Trace(
         val enable: Boolean,
@@ -93,8 +102,16 @@ fun parseMethodTracerCommand(text: String): TracerCommand {
         ResetKeyword -> TracerCommand.Reset
         TraceKeyword -> parseTraceCommand(tokens.advance(), true)
         UntraceKeyword -> parseTraceCommand(tokens.advance(), false)
+        PluginAllocKeyword -> parsePluginCommand(tokens.advance(), true)
+        ClearPluginAllocKeyword -> parsePluginCommand(tokens.advance(), false)
+        AllPluginsKeyword -> TracerCommand.AllPlugins
         else -> TracerCommand.Unknown
     }
+}
+
+private fun parsePluginCommand(tokens: List<Token>, enable: Boolean): TracerCommand {
+    val pluginName = (tokens.firstOrNull() as? Identifier)?.textString
+    return TracerCommand.PluginAlloc(enable, pluginName)
 }
 
 private fun parseTraceCommand(tokens: List<Token>, enable: Boolean): TracerCommand {
@@ -184,6 +201,9 @@ private object HashSymbol: Token()
 private object CommaSymbol: Token()
 private object OpenBracketSymbol: Token()
 private object CloseBracketSymbol: Token()
+private object PluginAllocKeyword: Token()
+private object ClearPluginAllocKeyword: Token()
+private object AllPluginsKeyword: Token()
 
 private fun tokenize(text: CharSequence): List<Token> {
     fun Char.isIdentifierChar() =
@@ -217,6 +237,9 @@ private fun tokenize(text: CharSequence): List<Token> {
                     "all" -> tokens.add(AllKeyword)
                     "count" -> tokens.add(CountKeyword)
                     "wall-time" -> tokens.add(WallTimeKeyword)
+                    "plugin-alloc" -> tokens.add(PluginAllocKeyword)
+                    "clear-plugin" -> tokens.add(ClearPluginAllocKeyword)
+                    "show-plugins-sizes" -> tokens.add(AllPluginsKeyword)
                     else -> tokens.add(Identifier(identifierText))
                 }
             }
